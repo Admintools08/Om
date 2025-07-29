@@ -209,7 +209,7 @@ class BackendTester:
             return False
         
         self.log_test("LinkedIn Post Generation", True,
-                    f"LinkedIn post generated successfully with {word_count} words and required elements",
+                    f"LinkedIn post generated successfully with {word_count} words and required elements{hashtag_note}",
                     f"Post preview: {linkedin_post[:150]}...")
         return True
 
