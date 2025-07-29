@@ -311,7 +311,7 @@ Difficulty: {request.difficulty}"""
                 raise HTTPException(status_code=500, detail="Could not parse Gemini response")
         
         # Generate the badge SVG
-        badge_svg = generate_badge_svg(request.employeeName, badge_text)
+        badge_svg = generate_badge_svg(request.employeeName, badge_text, request.difficulty)
         
         # Convert SVG to base64 data URL
         badge_base64 = base64.b64encode(badge_svg.encode('utf-8')).decode('utf-8')
