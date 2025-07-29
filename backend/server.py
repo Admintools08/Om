@@ -50,8 +50,45 @@ class GenerateResponse(BaseModel):
     linkedinPost: str
 
 # Badge generation function
-def generate_badge_svg(employee_name: str, badge_text: str) -> str:
-    """Generate SVG badge with Branding Pioneers branding - inspired by Outskill design"""
+def generate_badge_svg(employee_name: str, badge_text: str, difficulty: str) -> str:
+    """Generate SVG badge with Branding Pioneers branding - different designs for each difficulty"""
+    
+    # Define color schemes for each difficulty
+    difficulty_colors = {
+        "Easy": {
+            "primary": "#00FF88",
+            "secondary": "#00CC66", 
+            "accent": "#1C1C1C",
+            "glow": "#00FFAA",
+            "wing": "#90EE90"
+        },
+        "Moderate": {
+            "primary": "#FFAA00",
+            "secondary": "#FF8800",
+            "accent": "#222222", 
+            "glow": "#FFDD55",
+            "wing": "#FFD700"
+        },
+        "Hard": {
+            "primary": "#FF3366",
+            "secondary": "#FF1144",
+            "accent": "#2A2A2A",
+            "glow": "#FF6688", 
+            "wing": "#FF69B4"
+        }
+    }
+    
+    colors = difficulty_colors.get(difficulty, difficulty_colors["Easy"])
+    
+    # Difficulty symbols
+    difficulty_symbols = {
+        "Easy": "★",
+        "Moderate": "★★", 
+        "Hard": "★★★"
+    }
+    
+    symbol = difficulty_symbols.get(difficulty, "★")
+    
     svg_content = f"""
     <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -62,28 +99,28 @@ def generate_badge_svg(employee_name: str, badge_text: str) -> str:
                 <stop offset="100%" style="stop-color:#0f0f0f;stop-opacity:1" />
             </radialGradient>
             
-            <!-- Hexagon gradient -->
+            <!-- Hexagon gradient for difficulty -->
             <linearGradient id="hexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#FF416C;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#FF4B2B;stop-opacity:1" />
+                <stop offset="0%" style="stop-color:{colors['primary']};stop-opacity:1" />
+                <stop offset="100%" style="stop-color:{colors['secondary']};stop-opacity:1" />
             </linearGradient>
             
             <!-- Metallic wing gradient -->
             <linearGradient id="wingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#e0e0e0;stop-opacity:1" />
-                <stop offset="50%" style="stop-color:#c0c0c0;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#a0a0a0;stop-opacity:1" />
+                <stop offset="0%" style="stop-color:{colors['wing']};stop-opacity:0.8" />
+                <stop offset="50%" style="stop-color:#c0c0c0;stop-opacity:0.6" />
+                <stop offset="100%" style="stop-color:#a0a0a0;stop-opacity:0.4" />
             </linearGradient>
             
             <!-- Inner hexagon gradient -->
             <linearGradient id="innerHexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#4a4a4a;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#2a2a2a;stop-opacity:1" />
+                <stop offset="0%" style="stop-color:{colors['accent']};stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
             </linearGradient>
             
             <!-- Glow filter -->
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
                 <feMerge> 
                     <feMergeNode in="coloredBlur"/>
                     <feMergeNode in="SourceGraphic"/>
@@ -93,6 +130,17 @@ def generate_badge_svg(employee_name: str, badge_text: str) -> str:
             <!-- Shadow filter -->
             <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
                 <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/>
+            </filter>
+            
+            <!-- Difficulty glow -->
+            <filter id="difficultyGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                <feFlood flood-color="{colors['glow']}" result="glowColor"/>
+                <feComposite in="glowColor" in2="coloredBlur" operator="in" result="softGlow"/>
+                <feMerge> 
+                    <feMergeNode in="softGlow"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
             </filter>
         </defs>
         
@@ -120,9 +168,9 @@ def generate_badge_svg(employee_name: str, badge_text: str) -> str:
         <!-- Inner hexagon -->
         <path d="M 200 140 L 230 160 L 230 200 L 200 220 L 170 200 L 170 160 Z" fill="url(#innerHexGradient)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
         
-        <!-- Level number -->
-        <text x="200" y="190" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle" filter="url(#glow)">
-            1
+        <!-- Difficulty stars -->
+        <text x="200" y="190" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="middle" filter="url(#difficultyGlow)">
+            {symbol}
         </text>
         
         <!-- Branding Pioneers logo at top -->
@@ -135,32 +183,16 @@ def generate_badge_svg(employee_name: str, badge_text: str) -> str:
             {employee_name}
         </text>
         
-        <!-- Achievement subtitle -->
+        <!-- Achievement subtitle with difficulty -->
         <text x="200" y="305" font-family="Inter, sans-serif" font-size="14" fill="rgba(255,255,255,0.9)" text-anchor="middle">
-            Learning Champion, Level 1 Unlocked!
+            Learning Champion - {difficulty} Achievement
         </text>
         
-        <!-- Progress indicator - dimmed hexagons -->
-        <g transform="translate(120, 350)">
-            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(255,255,255,0.8)" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
-            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="black" text-anchor="middle">1</text>
-        </g>
-        <g transform="translate(160, 350)">
-            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
-            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">2</text>
-        </g>
-        <g transform="translate(200, 350)">
-            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
-            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">3</text>
-        </g>
-        <g transform="translate(240, 350)">
-            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
-            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">4</text>
-        </g>
-        <g transform="translate(280, 350)">
-            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
-            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">5</text>
-        </g>
+        <!-- Difficulty indicator at bottom -->
+        <rect x="160" y="340" width="80" height="20" rx="10" fill="url(#hexGradient)" opacity="0.8"/>
+        <text x="200" y="354" font-family="Inter, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">
+            {difficulty.upper()}
+        </text>
         
     </svg>
     """
