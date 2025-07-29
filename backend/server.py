@@ -214,7 +214,7 @@ Generate TWO outputs clearly separated:
 
 2. **LinkedIn Post**: A fully optimized LinkedIn post (200-300 words) that follows this EXACT format and structure:
 
-🎉 Super proud to share that I've just unlocked Level 1 in [Learning Topic] by Branding Pioneers! 🔥
+🎉 Super proud to share that I've just achieved a {request.difficulty} learning milestone in [Learning Topic] by Branding Pioneers! 🔥
 
 This isn't just learning, it's a transformative journey that's preparing professionals like me to master {request.learning} and apply it in real-world scenarios.
 
