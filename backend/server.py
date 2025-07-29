@@ -51,52 +51,117 @@ class GenerateResponse(BaseModel):
 
 # Badge generation function
 def generate_badge_svg(employee_name: str, badge_text: str) -> str:
-    """Generate SVG badge with Branding Pioneers branding"""
+    """Generate SVG badge with Branding Pioneers branding - inspired by Outskill design"""
     svg_content = f"""
     <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <!-- Dark atmospheric background gradient -->
+            <radialGradient id="backgroundGradient" cx="50%" cy="30%" r="80%">
+                <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+                <stop offset="70%" style="stop-color:#1a1a1a;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#0f0f0f;stop-opacity:1" />
+            </radialGradient>
+            
+            <!-- Hexagon gradient -->
+            <linearGradient id="hexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:#FF416C;stop-opacity:1" />
                 <stop offset="100%" style="stop-color:#FF4B2B;stop-opacity:1" />
             </linearGradient>
-            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.2)"/>
+            
+            <!-- Metallic wing gradient -->
+            <linearGradient id="wingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#e0e0e0;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#c0c0c0;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#a0a0a0;stop-opacity:1" />
+            </linearGradient>
+            
+            <!-- Inner hexagon gradient -->
+            <linearGradient id="innerHexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#4a4a4a;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#2a2a2a;stop-opacity:1" />
+            </linearGradient>
+            
+            <!-- Glow filter -->
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge> 
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+            
+            <!-- Shadow filter -->
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="rgba(0,0,0,0.4)"/>
             </filter>
         </defs>
         
-        <!-- Background circle -->
-        <circle cx="200" cy="200" r="180" fill="url(#badgeGradient)" filter="url(#shadow)"/>
+        <!-- Dark atmospheric background -->
+        <rect width="400" height="400" fill="url(#backgroundGradient)"/>
         
-        <!-- Inner circle -->
-        <circle cx="200" cy="200" r="150" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+        <!-- Atmospheric mist effect -->
+        <circle cx="100" cy="100" r="80" fill="rgba(255,255,255,0.03)"/>
+        <circle cx="300" cy="150" r="60" fill="rgba(255,255,255,0.02)"/>
+        <circle cx="150" cy="320" r="70" fill="rgba(255,255,255,0.03)"/>
         
-        <!-- Logo placeholder (we'll use text for now) -->
-        <text x="200" y="120" font-family="Inter, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">
-            BRANDING
+        <!-- Left wing -->
+        <path d="M 120 200 L 90 180 L 85 190 L 90 200 L 85 210 L 90 220 L 120 200 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        <path d="M 140 190 L 110 170 L 105 180 L 110 190 L 105 200 L 110 210 L 140 190 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        <path d="M 140 210 L 110 230 L 105 220 L 110 210 L 105 200 L 110 190 L 140 210 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        
+        <!-- Right wing -->
+        <path d="M 280 200 L 310 180 L 315 190 L 310 200 L 315 210 L 310 220 L 280 200 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        <path d="M 260 190 L 290 170 L 295 180 L 290 190 L 295 200 L 290 210 L 260 190 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        <path d="M 260 210 L 290 230 L 295 220 L 290 210 L 295 200 L 290 190 L 260 210 Z" fill="url(#wingGradient)" filter="url(#shadow)"/>
+        
+        <!-- Main hexagonal badge -->
+        <path d="M 200 120 L 250 150 L 250 210 L 200 240 L 150 210 L 150 150 Z" fill="url(#hexGradient)" filter="url(#shadow)"/>
+        
+        <!-- Inner hexagon -->
+        <path d="M 200 140 L 230 160 L 230 200 L 200 220 L 170 200 L 170 160 Z" fill="url(#innerHexGradient)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+        
+        <!-- Level number -->
+        <text x="200" y="190" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle" filter="url(#glow)">
+            1
         </text>
-        <text x="200" y="145" font-family="Inter, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">
-            PIONEERS
-        </text>
         
-        <!-- Badge text -->
-        <text x="200" y="180" font-family="Inter, sans-serif" font-size="14" fill="white" text-anchor="middle">
-            {badge_text}
+        <!-- Branding Pioneers logo at top -->
+        <text x="200" y="50" font-family="Inter, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">
+            BRANDING PIONEERS
         </text>
         
         <!-- Employee name -->
-        <text x="200" y="220" font-family="Inter, sans-serif" font-size="18" font-weight="600" fill="white" text-anchor="middle">
+        <text x="200" y="280" font-family="Inter, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">
             {employee_name}
         </text>
         
-        <!-- Achievement text -->
-        <text x="200" y="260" font-family="Inter, sans-serif" font-size="12" fill="rgba(255,255,255,0.9)" text-anchor="middle">
-            Learning Champion
+        <!-- Achievement subtitle -->
+        <text x="200" y="305" font-family="Inter, sans-serif" font-size="14" fill="rgba(255,255,255,0.9)" text-anchor="middle">
+            Learning Champion, Level 1 Unlocked!
         </text>
         
-        <!-- Decorative elements -->
-        <circle cx="200" cy="300" r="3" fill="white" opacity="0.8"/>
-        <circle cx="180" cy="300" r="2" fill="white" opacity="0.6"/>
-        <circle cx="220" cy="300" r="2" fill="white" opacity="0.6"/>
+        <!-- Progress indicator - dimmed hexagons -->
+        <g transform="translate(120, 350)">
+            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(255,255,255,0.8)" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="black" text-anchor="middle">1</text>
+        </g>
+        <g transform="translate(160, 350)">
+            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
+            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">2</text>
+        </g>
+        <g transform="translate(200, 350)">
+            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
+            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">3</text>
+        </g>
+        <g transform="translate(240, 350)">
+            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
+            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">4</text>
+        </g>
+        <g transform="translate(280, 350)">
+            <path d="M 0 0 L 12 7 L 12 21 L 0 28 L -12 21 L -12 7 Z" fill="rgba(100,100,100,0.3)" stroke="rgba(150,150,150,0.3)" stroke-width="1"/>
+            <text x="0" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="rgba(255,255,255,0.3)" text-anchor="middle">5</text>
+        </g>
+        
     </svg>
     """
     return svg_content
