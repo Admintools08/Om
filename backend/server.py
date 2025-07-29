@@ -178,15 +178,39 @@ async def generate_badge_and_post(request: GenerateRequest):
 ### Task:
 Generate TWO outputs clearly separated:
 
-1. **Badge Description**: A short, creative, and celebratory text that can be used to design a digital badge image. It should include the employee's name, what they learned, and the difficulty level. Keep it under 15 words. Tone: motivational and professional.
+1. **Badge Description**: A short, creative, and celebratory text that can be used to design a digital badge image. It should include what they learned and be motivational. Keep it under 10 words. Tone: motivational and professional.
 
-2. **LinkedIn Post**: A fully optimized LinkedIn post (150-200 words) that:
-   - Highlights the employee's achievement naturally.
-   - Mentions what they learned in a proud, growth-oriented way.
-   - Subtly mentions Branding Pioneers as a culture of continuous learning.
-   - Uses an engaging tone, with small storytelling elements.
-   - Includes a soft call-to-action (e.g., 'connect', 'let's share learnings', or 'celebrate together').
-   - Uses 3-4 relevant hashtags at the end (#LearningJourney #BrandingPioneers #GrowthMindset etc.).
+2. **LinkedIn Post**: A fully optimized LinkedIn post (200-300 words) that follows this EXACT format and structure:
+
+🎉 Super proud to share that I've just unlocked Level 1 in [Learning Topic] by Branding Pioneers! 🔥
+
+This isn't just learning, it's a transformative journey that's preparing professionals like me to master {request.learning} and apply it in real-world scenarios.
+
+I've made a commitment to:
+Learn in Public and document everything I'm discovering not just for myself, but to inspire others to start their learning journey too. 🌱
+
+Here are my key takeaways from this {request.difficulty.lower()} level challenge:
+🧠 [Key insight 1 related to what they learned]
+🔍 [Key insight 2 related to what they learned]  
+⚙️ [Key insight 3 related to what they learned]
+
+The learnings from this level have completely transformed my understanding of {request.learning} in real-world applications.
+
+➡️ I'll be sharing updates of my journey and what I achieve in future levels
+
+🧭 Follow my journey and feel free to DM if you are curious, let's grow together.
+
+💬 What's one thing you're curious about when it comes to {request.learning}? Let's chat in the comments.
+
+#LearningInPublic #BrandingPioneers #GrowthMindset #ProfessionalDevelopment
+
+### Important Guidelines:
+- Use EXACTLY the structure above with the same emojis and format
+- Replace [Learning Topic] with a relevant topic name based on what they learned
+- Replace the bracketed sections with specific, relevant content
+- Keep the tone enthusiastic and engaging
+- Make the key takeaways specific to what they actually learned
+- End with the exact hashtags shown
 
 ### Format Your Output Exactly As:
 BADGE: <badge text here>
