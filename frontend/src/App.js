@@ -1,174 +1,104 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 import axios from "axios";
+import LoginForm from "./components/LoginForm";
+import AdminDashboard from "./components/AdminDashboard";
+import BadgeGenerator from "./components/BadgeGenerator";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Configure axios to include cookies
+axios.defaults.withCredentials = true;
+
 function App() {
-  const [formData, setFormData] = useState({
-    employeeName: '',
-    learning: '',
-    difficulty: 'Easy'
-  });
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  useEffect(() => {
+    // Check if user is already logged in
+    checkAuthStatus();
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setResult(null);
-    
+  const checkAuthStatus = async () => {
     try {
-      const response = await axios.post(`${API}/generate`, formData);
-      setResult(response.data);
+      const response = await axios.get(`${API}/auth/me`);
+      setUser(response.data);
     } catch (error) {
-      console.error('Error generating badge and post:', error);
-      alert('Error generating content. Please try again.');
+      // User not logged in
+      console.log('User not authenticated');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const copyToClipboard = async () => {
+  const handleLogin = async (name) => {
     try {
-      await navigator.clipboard.writeText(result.linkedinPost);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
+      const response = await axios.post(`${API}/auth/login`, { name });
+      setUser(response.data.user);
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
     }
   };
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${API}/auth/logout`);
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div className="container">
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="app">
+        <LoginForm onLogin={handleLogin} />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
-      <div className="container">
-        <header className="header">
-          <h1 className="title">
+      <header className="app-header">
+        <div className="header-content">
+          <h1 className="app-title">
             <span className="brand-text">Branding Pioneers</span>
-            <br />
-            Learning Badge Generator
+            {user.role === 'admin' ? ' Admin Dashboard' : ' Learning Badge Generator'}
           </h1>
-          <p className="subtitle">
-            Celebrate your learning achievements with beautiful badges and LinkedIn posts
-          </p>
-        </header>
-
-        <div className="card">
-          <form onSubmit={handleSubmit} className="form">
-            <div className="form-group">
-              <label htmlFor="employeeName" className="label">Your Name</label>
-              <input
-                type="text"
-                id="employeeName"
-                name="employeeName"
-                value={formData.employeeName}
-                onChange={handleInputChange}
-                required
-                className="input"
-                placeholder="Enter your full name"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="learning" className="label">What did you learn?</label>
-              <textarea
-                id="learning"
-                name="learning"
-                value={formData.learning}
-                onChange={handleInputChange}
-                required
-                className="textarea"
-                placeholder="Describe what you learned today..."
-                rows="4"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="difficulty" className="label">Difficulty Level</label>
-              <select
-                id="difficulty"
-                name="difficulty"
-                value={formData.difficulty}
-                onChange={handleInputChange}
-                className="select"
-              >
-                <option value="Easy">Easy</option>
-                <option value="Moderate">Moderate</option>
-                <option value="Hard">Hard</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="submit-button"
-            >
-              {isLoading ? (
-                <>
-                  <div className="spinner"></div>
-                  Generating...
-                </>
-              ) : (
-                'Generate Badge & Post'
-              )}
+          <div className="user-info">
+            <span className="welcome-text">Welcome, {user.name}</span>
+            {user.role === 'admin' && (
+              <span className="admin-badge">Admin</span>
+            )}
+            <button onClick={handleLogout} className="logout-btn">
+              Logout
             </button>
-          </form>
-        </div>
-
-        {result && (
-          <div className="results">
-            <div className="success-message">
-              🎉 Your badge & LinkedIn post are ready!
-            </div>
-            
-            <div className="results-grid">
-              <div className="badge-section">
-                <h3 className="section-title">Your Learning Badge</h3>
-                <div className="badge-container">
-                  <img 
-                    src={result.badgeUrl} 
-                    alt="Learning Achievement Badge" 
-                    className="badge-image"
-                  />
-                </div>
-              </div>
-
-              <div className="post-section">
-                <h3 className="section-title">LinkedIn Post</h3>
-                <div className="post-container">
-                  <textarea
-                    value={result.linkedinPost}
-                    readOnly
-                    className="post-textarea"
-                    rows="8"
-                  />
-                  <button
-                    onClick={copyToClipboard}
-                    className="copy-button"
-                  >
-                    {copySuccess ? '✓ Copied!' : 'Copy to Clipboard'}
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
-        )}
+        </div>
+      </header>
 
-        <footer className="footer">
-          Made with ❤️ by Branding Pioneers
-        </footer>
-      </div>
+      <main className="main-content">
+        {user.role === 'admin' ? (
+          <AdminDashboard />
+        ) : (
+          <BadgeGenerator />
+        )}
+      </main>
     </div>
   );
 }
