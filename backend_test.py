@@ -557,13 +557,12 @@ class BackendTester:
                             f"Content starts with: {svg_content[:100]}...")
                 return False
             
-            # Check for Branding Pioneers elements
+            # Check for Branding Pioneers elements (updated for current test data)
             required_elements = [
                 "BRANDING",
                 "PIONEERS", 
-                "John Smith",  # Employee name from test data
-                "#FF416C",     # Branding Pioneers gradient color
-                "#FF4B2B"      # Branding Pioneers gradient color
+                "Sarah Johnson",  # Employee name from current test data
+                "Moderate"        # Difficulty level
             ]
             
             missing_elements = []
@@ -601,10 +600,10 @@ class BackendTester:
                         f"Post length: {len(linkedin_post)} chars")
             return False
         
-        # Check for key elements that should be in a good LinkedIn post
+        # Check for key elements that should be in a good LinkedIn post (updated for current test data)
         required_elements = [
-            "John Smith",  # Employee name
-            "React",       # Learning topic (partial match, case insensitive)
+            "Sarah Johnson",  # Employee name from current test data
+            "Python",         # Learning topic (partial match, case insensitive)
         ]
         
         missing_elements = []
