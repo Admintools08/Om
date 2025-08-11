@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Backend API Testing for Branding Pioneers Learning Badge & LinkedIn Post Generator
-Tests Gemini API integration and SVG badge generation functionality
+Tests authentication, admin functionality, and badge generation with comprehensive coverage
 """
 
 import requests
 import json
 import base64
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 
@@ -24,6 +24,8 @@ class BackendTester:
         self.test_results = []
         self.passed_tests = 0
         self.failed_tests = 0
+        self.admin_session = None
+        self.user_session = None
         
     def log_test(self, test_name: str, passed: bool, message: str, details: str = ""):
         """Log test results"""
