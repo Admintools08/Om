@@ -682,6 +682,400 @@ class BackendTester:
         
         return True
 
+    def test_create_employee_profile(self):
+        """Test creating employee profile (required for recommendations)"""
+        if not self.user_session:
+            # Create a new user session for profile testing
+            test_data = {"name": "John Doe"}
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/auth/login",
+                    json=test_data,
+                    headers={"Content-Type": "application/json"},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    self.user_session = response.cookies.get('session_token')
+                else:
+                    self.log_test("Create Employee Profile", False, "Failed to create user session for profile test")
+                    return None
+            except Exception as e:
+                self.log_test("Create Employee Profile", False, f"Failed to login for profile test: {str(e)}")
+                return None
+
+        profile_data = {
+            "full_name": "John Doe",
+            "position": "Senior Software Engineer",
+            "department": "Engineering",
+            "date_of_joining": "2023-01-15T00:00:00Z",
+            "existing_skills": ["Python", "JavaScript", "React", "FastAPI", "MongoDB"],
+            "learning_interests": ["Machine Learning", "AI Development", "Cloud Architecture", "DevOps"]
+        }
+        
+        try:
+            cookies = {'session_token': self.user_session}
+            response = requests.post(
+                f"{API_BASE_URL}/profile",
+                json=profile_data,
+                cookies=cookies,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["id", "user_id", "full_name", "position", "department", "existing_skills", "learning_interests"]
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    self.log_test("Create Employee Profile", True, 
+                                "Employee profile created successfully with all required fields",
+                                f"Profile ID: {data.get('id')}, Skills: {len(data.get('existing_skills', []))}, Interests: {len(data.get('learning_interests', []))}")
+                    return data
+                else:
+                    self.log_test("Create Employee Profile", False,
+                                f"Profile response missing fields: {missing_fields}",
+                                f"Available fields: {list(data.keys())}")
+                    return None
+            elif response.status_code == 400:
+                # Profile might already exist, try to get it
+                try:
+                    get_response = requests.get(
+                        f"{API_BASE_URL}/profile",
+                        cookies=cookies,
+                        timeout=10
+                    )
+                    if get_response.status_code == 200:
+                        data = get_response.json()
+                        self.log_test("Create Employee Profile", True, 
+                                    "Employee profile already exists - retrieved existing profile",
+                                    f"Profile ID: {data.get('id')}, Skills: {len(data.get('existing_skills', []))}")
+                        return data
+                except:
+                    pass
+                
+                self.log_test("Create Employee Profile", False,
+                            f"Profile creation failed with status {response.status_code}",
+                            response.text)
+                return None
+            else:
+                self.log_test("Create Employee Profile", False,
+                            f"Profile creation failed with status {response.status_code}",
+                            response.text)
+                return None
+                
+        except Exception as e:
+            self.log_test("Create Employee Profile", False,
+                        f"Failed to create employee profile: {str(e)}")
+            return None
+
+    def test_get_ai_recommendations(self):
+        """Test GET /api/recommendations endpoint for AI-powered recommendations"""
+        if not self.user_session:
+            self.log_test("AI Recommendations (GET)", False, "No user session available for testing")
+            return None
+            
+        try:
+            cookies = {'session_token': self.user_session}
+            response = requests.get(
+                f"{API_BASE_URL}/recommendations",
+                cookies=cookies,
+                timeout=30  # AI generation might take longer
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["paid_recommendations", "unpaid_recommendations", "total_count", "personalization_factors"]
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    paid_count = len(data.get("paid_recommendations", []))
+                    unpaid_count = len(data.get("unpaid_recommendations", []))
+                    total_count = data.get("total_count", 0)
+                    
+                    # Validate recommendation structure
+                    valid_recommendations = True
+                    sample_recommendation = None
+                    
+                    if paid_count > 0:
+                        sample_recommendation = data["paid_recommendations"][0]
+                        required_rec_fields = ["title", "description", "platform", "category", "difficulty_level", "reason"]
+                        missing_rec_fields = [field for field in required_rec_fields if field not in sample_recommendation]
+                        if missing_rec_fields:
+                            valid_recommendations = False
+                            self.log_test("AI Recommendations (GET)", False,
+                                        f"Recommendation structure invalid - missing fields: {missing_rec_fields}",
+                                        f"Sample recommendation keys: {list(sample_recommendation.keys())}")
+                            return None
+                    
+                    if valid_recommendations:
+                        self.log_test("AI Recommendations (GET)", True, 
+                                    f"AI recommendations retrieved successfully - {paid_count} paid, {unpaid_count} unpaid, total: {total_count}",
+                                    f"Personalization factors: {data.get('personalization_factors', [])}")
+                        return data
+                    else:
+                        return None
+                else:
+                    self.log_test("AI Recommendations (GET)", False,
+                                f"Recommendations response missing fields: {missing_fields}",
+                                f"Available fields: {list(data.keys())}")
+                    return None
+            elif response.status_code == 404:
+                self.log_test("AI Recommendations (GET)", False,
+                            "User profile not found - profile required for recommendations",
+                            "Need to create employee profile first")
+                return None
+            else:
+                self.log_test("AI Recommendations (GET)", False,
+                            f"Recommendations failed with status {response.status_code}",
+                            response.text)
+                return None
+                
+        except Exception as e:
+            self.log_test("AI Recommendations (GET)", False,
+                        f"Failed to get AI recommendations: {str(e)}")
+            return None
+
+    def test_refresh_ai_recommendations(self):
+        """Test POST /api/recommendations/refresh endpoint"""
+        if not self.user_session:
+            self.log_test("AI Recommendations Refresh", False, "No user session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.user_session}
+            response = requests.post(
+                f"{API_BASE_URL}/recommendations/refresh",
+                cookies=cookies,
+                timeout=30  # AI generation might take longer
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data and "refresh" in data["message"].lower():
+                    self.log_test("AI Recommendations Refresh", True, 
+                                "Recommendations refresh successful - cache cleared and regenerated",
+                                f"Response: {data.get('message')}")
+                    return True
+                else:
+                    self.log_test("AI Recommendations Refresh", False,
+                                "Unexpected refresh response format",
+                                f"Response: {data}")
+                    return False
+            elif response.status_code == 404:
+                self.log_test("AI Recommendations Refresh", False,
+                            "User profile not found for refresh - profile required",
+                            "Need to create employee profile first")
+                return False
+            else:
+                self.log_test("AI Recommendations Refresh", False,
+                            f"Recommendations refresh failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("AI Recommendations Refresh", False,
+                        f"Failed to refresh recommendations: {str(e)}")
+            return False
+
+    def test_ai_recommendation_quality(self, recommendations_data: Dict[Any, Any]):
+        """Test the quality and structure of AI-generated recommendations"""
+        if not recommendations_data:
+            self.log_test("AI Recommendation Quality", False, "No recommendations data to validate")
+            return False
+        
+        paid_recs = recommendations_data.get("paid_recommendations", [])
+        unpaid_recs = recommendations_data.get("unpaid_recommendations", [])
+        
+        if len(paid_recs) == 0 and len(unpaid_recs) == 0:
+            self.log_test("AI Recommendation Quality", False, "No recommendations generated by AI")
+            return False
+        
+        # Test recommendation content quality
+        quality_issues = []
+        
+        # Check paid recommendations
+        for i, rec in enumerate(paid_recs):
+            if not rec.get("title") or len(rec.get("title", "")) < 10:
+                quality_issues.append(f"Paid rec {i+1}: Title too short or missing")
+            if not rec.get("description") or len(rec.get("description", "")) < 20:
+                quality_issues.append(f"Paid rec {i+1}: Description too short or missing")
+            if rec.get("category") != "paid":
+                quality_issues.append(f"Paid rec {i+1}: Category should be 'paid'")
+            if not rec.get("price"):
+                quality_issues.append(f"Paid rec {i+1}: Price missing for paid recommendation")
+            if not rec.get("reason") or len(rec.get("reason", "")) < 15:
+                quality_issues.append(f"Paid rec {i+1}: Reason too short or missing")
+        
+        # Check unpaid recommendations
+        for i, rec in enumerate(unpaid_recs):
+            if not rec.get("title") or len(rec.get("title", "")) < 10:
+                quality_issues.append(f"Unpaid rec {i+1}: Title too short or missing")
+            if not rec.get("description") or len(rec.get("description", "")) < 20:
+                quality_issues.append(f"Unpaid rec {i+1}: Description too short or missing")
+            if rec.get("category") != "unpaid":
+                quality_issues.append(f"Unpaid rec {i+1}: Category should be 'unpaid'")
+            if not rec.get("reason") or len(rec.get("reason", "")) < 15:
+                quality_issues.append(f"Unpaid rec {i+1}: Reason too short or missing")
+        
+        if quality_issues:
+            self.log_test("AI Recommendation Quality", False,
+                        f"AI recommendation quality issues found: {len(quality_issues)} issues",
+                        f"Issues: {quality_issues[:3]}...")  # Show first 3 issues
+            return False
+        
+        # Check for personalization indicators
+        personalization_indicators = []
+        all_reasons = [rec.get("reason", "") for rec in paid_recs + unpaid_recs]
+        combined_reasons = " ".join(all_reasons).lower()
+        
+        # Look for signs of personalization
+        personal_keywords = ["your", "you", "based on", "given", "considering", "since you", "for your"]
+        for keyword in personal_keywords:
+            if keyword in combined_reasons:
+                personalization_indicators.append(keyword)
+        
+        # Check for skill/interest relevance
+        skill_keywords = ["python", "javascript", "machine learning", "ai", "cloud", "devops", "react", "fastapi"]
+        relevant_skills = []
+        for skill in skill_keywords:
+            if skill in combined_reasons:
+                relevant_skills.append(skill)
+        
+        self.log_test("AI Recommendation Quality", True,
+                    f"AI recommendations show good quality - {len(paid_recs)} paid, {len(unpaid_recs)} unpaid",
+                    f"Personalization indicators: {personalization_indicators[:3]}, Relevant skills: {relevant_skills[:3]}")
+        return True
+
+    def test_gemini_api_integration(self, recommendations_data: Dict[Any, Any]):
+        """Test that Gemini API integration is working correctly"""
+        if not recommendations_data:
+            self.log_test("Gemini API Integration", False, "No recommendations data to validate API integration")
+            return False
+        
+        paid_recs = recommendations_data.get("paid_recommendations", [])
+        unpaid_recs = recommendations_data.get("unpaid_recommendations", [])
+        total_recs = len(paid_recs) + len(unpaid_recs)
+        
+        if total_recs == 0:
+            self.log_test("Gemini API Integration", False, "No recommendations generated - possible API integration issue")
+            return False
+        
+        # Check for signs of AI-generated content
+        ai_quality_indicators = []
+        
+        # Check for variety in platforms
+        platforms = set()
+        for rec in paid_recs + unpaid_recs:
+            platform = rec.get("platform", "").lower()
+            if platform:
+                platforms.add(platform)
+        
+        if len(platforms) >= 3:
+            ai_quality_indicators.append(f"Platform variety: {len(platforms)} different platforms")
+        
+        # Check for realistic difficulty levels
+        difficulty_levels = set()
+        for rec in paid_recs + unpaid_recs:
+            difficulty = rec.get("difficulty_level", "").lower()
+            if difficulty in ["beginner", "intermediate", "advanced"]:
+                difficulty_levels.add(difficulty)
+        
+        if len(difficulty_levels) >= 2:
+            ai_quality_indicators.append(f"Difficulty variety: {difficulty_levels}")
+        
+        # Check for realistic time estimates
+        time_estimates = []
+        for rec in paid_recs + unpaid_recs:
+            hours = rec.get("estimated_hours", 0)
+            if isinstance(hours, int) and 1 <= hours <= 100:
+                time_estimates.append(hours)
+        
+        if len(time_estimates) >= total_recs * 0.8:  # At least 80% have realistic time estimates
+            ai_quality_indicators.append(f"Realistic time estimates: {len(time_estimates)}/{total_recs}")
+        
+        # Check for proper URL structure
+        valid_urls = 0
+        for rec in paid_recs + unpaid_recs:
+            url = rec.get("url", "")
+            if url and ("http" in url or "www." in url or ".com" in url):
+                valid_urls += 1
+        
+        if valid_urls >= total_recs * 0.7:  # At least 70% have valid-looking URLs
+            ai_quality_indicators.append(f"Valid URLs: {valid_urls}/{total_recs}")
+        
+        if len(ai_quality_indicators) >= 3:
+            self.log_test("Gemini API Integration", True,
+                        f"Gemini API integration working correctly - generated {total_recs} quality recommendations",
+                        f"Quality indicators: {ai_quality_indicators}")
+            return True
+        else:
+            self.log_test("Gemini API Integration", False,
+                        f"Gemini API integration may have issues - low quality indicators: {len(ai_quality_indicators)}/4",
+                        f"Generated {total_recs} recommendations but quality concerns exist")
+            return False
+
+    def test_recommendations_caching(self):
+        """Test that recommendations are properly cached in database"""
+        if not self.user_session:
+            self.log_test("Recommendations Caching", False, "No user session available for testing")
+            return False
+        
+        try:
+            cookies = {'session_token': self.user_session}
+            
+            # First request - should generate new recommendations
+            response1 = requests.get(
+                f"{API_BASE_URL}/recommendations",
+                cookies=cookies,
+                timeout=30
+            )
+            
+            if response1.status_code != 200:
+                self.log_test("Recommendations Caching", False, "Failed to get initial recommendations for caching test")
+                return False
+            
+            # Second request immediately after - should use cached results (faster)
+            import time
+            start_time = time.time()
+            response2 = requests.get(
+                f"{API_BASE_URL}/recommendations",
+                cookies=cookies,
+                timeout=30
+            )
+            end_time = time.time()
+            
+            if response2.status_code != 200:
+                self.log_test("Recommendations Caching", False, "Failed to get cached recommendations")
+                return False
+            
+            # Compare response times (cached should be faster)
+            response_time = end_time - start_time
+            
+            # Compare content (should be identical for cached results)
+            data1 = response1.json()
+            data2 = response2.json()
+            
+            # Check if recommendations are identical (indicating caching)
+            recs1_titles = [rec.get("title") for rec in data1.get("paid_recommendations", []) + data1.get("unpaid_recommendations", [])]
+            recs2_titles = [rec.get("title") for rec in data2.get("paid_recommendations", []) + data2.get("unpaid_recommendations", [])]
+            
+            if recs1_titles == recs2_titles and len(recs1_titles) > 0:
+                self.log_test("Recommendations Caching", True,
+                            f"Recommendations caching working - identical results returned in {response_time:.2f}s",
+                            f"Cached {len(recs1_titles)} recommendations successfully")
+                return True
+            else:
+                self.log_test("Recommendations Caching", False,
+                            "Recommendations not properly cached - different results returned",
+                            f"First: {len(recs1_titles)} recs, Second: {len(recs2_titles)} recs")
+                return False
+                
+        except Exception as e:
+            self.log_test("Recommendations Caching", False,
+                        f"Failed to test recommendations caching: {str(e)}")
+            return False
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("=" * 80)
