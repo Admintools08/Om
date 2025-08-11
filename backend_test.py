@@ -684,24 +684,23 @@ class BackendTester:
 
     def test_create_employee_profile(self):
         """Test creating employee profile (required for recommendations)"""
-        if not self.user_session:
-            # Create a new user session for profile testing
-            test_data = {"name": "John Doe"}
-            try:
-                response = requests.post(
-                    f"{API_BASE_URL}/auth/login",
-                    json=test_data,
-                    headers={"Content-Type": "application/json"},
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    self.user_session = response.cookies.get('session_token')
-                else:
-                    self.log_test("Create Employee Profile", False, "Failed to create user session for profile test")
-                    return None
-            except Exception as e:
-                self.log_test("Create Employee Profile", False, f"Failed to login for profile test: {str(e)}")
+        # Create a fresh user session for profile testing (since logout test cleared the session)
+        test_data = {"name": "John Doe"}
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/auth/login",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            if response.status_code == 200:
+                self.user_session = response.cookies.get('session_token')
+            else:
+                self.log_test("Create Employee Profile", False, "Failed to create user session for profile test")
                 return None
+        except Exception as e:
+            self.log_test("Create Employee Profile", False, f"Failed to login for profile test: {str(e)}")
+            return None
 
         profile_data = {
             "full_name": "John Doe",
