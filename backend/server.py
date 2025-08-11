@@ -186,6 +186,34 @@ class AdminStats(BaseModel):
     top_learning_platforms: List[dict]
     skills_by_department: List[dict]
 
+class RecommendationItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    platform: str
+    url: str
+    category: str  # "paid" or "unpaid"
+    skill_tags: List[str]
+    difficulty_level: str  # "beginner", "intermediate", "advanced"
+    estimated_hours: int
+    rating: Optional[float] = None
+    price: Optional[str] = None
+    reason: str  # Why this is recommended
+    relevance_score: float = 0.0
+
+class UserRecommendations(BaseModel):
+    user_id: str
+    paid_recommendations: List[RecommendationItem]
+    unpaid_recommendations: List[RecommendationItem]
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(hours=24))
+
+class RecommendationsResponse(BaseModel):
+    paid_recommendations: List[RecommendationItem]
+    unpaid_recommendations: List[RecommendationItem]
+    total_count: int
+    personalization_factors: List[str]
+
 # Authentication endpoints
 @api_router.post("/auth/login", response_model=AuthResponse)
 async def login_user(user_data: UserLogin, response: Response):
