@@ -668,7 +668,7 @@ class BackendTester:
     def run_all_tests(self):
         """Run all backend tests"""
         print("=" * 80)
-        print("BRANDING PIONEERS BACKEND API TESTING")
+        print("BRANDING PIONEERS COMPREHENSIVE BACKEND API TESTING")
         print("=" * 80)
         print(f"Testing API at: {API_BASE_URL}")
         print()
@@ -678,20 +678,65 @@ class BackendTester:
             print("❌ API health check failed. Stopping tests.")
             return self.get_summary()
         
-        # Test 2: Gemini API Integration (main test)
-        api_response = self.test_gemini_api_integration()
+        print("\n" + "=" * 60)
+        print("AUTHENTICATION TESTING")
+        print("=" * 60)
         
-        if api_response:
-            # Test 3: SVG Badge Generation
-            self.test_svg_badge_generation(api_response)
+        # Test 2: Admin Login (Arush T.)
+        admin_login_result = self.test_admin_login()
+        
+        # Test 3: Regular User Login (John Doe)
+        user_login_result = self.test_user_login()
+        
+        # Test 4: Auth Me Endpoint
+        self.test_auth_me_endpoint()
+        
+        # Test 5: Logout Endpoint
+        self.test_logout_endpoint()
+        
+        print("\n" + "=" * 60)
+        print("ADMIN ACCESS CONTROL TESTING")
+        print("=" * 60)
+        
+        # Test 6: Admin Stats with Admin Session
+        self.test_admin_stats_with_admin()
+        
+        # Test 7: Admin Stats with User Session (should fail)
+        self.test_admin_stats_with_user()
+        
+        # Test 8: Admin Stats without Authentication (should fail)
+        self.test_admin_stats_without_auth()
+        
+        # Test 9: Admin Users Endpoint
+        self.test_admin_users_endpoint()
+        
+        # Test 10: Admin Badges Endpoint
+        self.test_admin_badges_endpoint()
+        
+        # Test 11: Admin Actions Endpoint
+        self.test_admin_actions_endpoint()
+        
+        print("\n" + "=" * 60)
+        print("BADGE GENERATION WITH AUTH TESTING")
+        print("=" * 60)
+        
+        # Test 12: Badge Generation with Authentication
+        badge_response = self.test_badge_generation_with_auth()
+        
+        # Test 13: Badge Generation without Authentication (should fail)
+        self.test_badge_generation_without_auth()
+        
+        # Test 14: SVG Badge Generation (if we got a response)
+        if badge_response:
+            self.test_svg_badge_generation(badge_response)
             
-            # Test 4: LinkedIn Post Generation  
-            self.test_linkedin_post_generation(api_response)
+            # Test 15: LinkedIn Post Generation
+            self.test_linkedin_post_generation(badge_response)
             
-            # Test 5: Response Format
-            self.test_response_format(api_response)
+            # Test 16: Response Format
+            self.test_response_format(badge_response)
         else:
-            print("❌ Gemini API integration failed. Skipping dependent tests.")
+            print("❌ Badge generation with auth failed. Skipping dependent tests.")
         
         return self.get_summary()
 
