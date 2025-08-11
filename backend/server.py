@@ -88,12 +88,103 @@ class AuthResponse(BaseModel):
     user: User
     session_token: str
 
+class EmployeeProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    full_name: str
+    position: str
+    department: str
+    date_of_joining: datetime
+    existing_skills: List[str]
+    learning_interests: List[str]
+    profile_picture: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EmployeeProfileCreate(BaseModel):
+    full_name: str
+    position: str
+    department: str
+    date_of_joining: datetime
+    existing_skills: List[str]
+    learning_interests: List[str]
+    profile_picture: Optional[str] = None
+
+class LearningGoal(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    title: str
+    description: str
+    target_completion_date: datetime
+    status: str = "active"  # "active", "completed", "paused"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class LearningGoalCreate(BaseModel):
+    title: str
+    description: str
+    target_completion_date: datetime
+
+class Milestone(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    goal_id: Optional[str] = None
+    what_learned: str
+    source: str  # From where learned
+    can_teach: bool
+    hours_invested: float
+    project_certificate_link: Optional[str] = None
+    month_year: str  # Format: "2024-01"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class MilestoneCreate(BaseModel):
+    goal_id: Optional[str] = None
+    what_learned: str
+    source: str
+    can_teach: bool
+    hours_invested: float
+    project_certificate_link: Optional[str] = None
+
+class Resource(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    url: str
+    description: str
+    category: str
+    tags: List[str]
+    added_by_user_id: str
+    approved: bool = False
+    approved_by_admin_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ResourceCreate(BaseModel):
+    title: str
+    url: str
+    description: str
+    category: str
+    tags: List[str]
+
+class Bookmark(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    bookmarked_user_id: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 class AdminStats(BaseModel):
     total_users: int
     total_admins: int
     total_badges_generated: int
     recent_activities: List[dict]
     top_learners: List[dict]
+    # Learning platform stats
+    total_profiles: int
+    total_goals: int
+    total_milestones: int
+    total_resources: int
+    monthly_learning_hours: float
+    employees_meeting_target: int
+    top_learning_platforms: List[dict]
+    skills_by_department: List[dict]
 
 # Authentication endpoints
 @api_router.post("/auth/login", response_model=AuthResponse)
