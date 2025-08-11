@@ -245,11 +245,20 @@ def generate_badge_svg(employee_name: str, badge_text: str, difficulty: str) -> 
     return svg_content
 
 @api_router.post("/generate", response_model=GenerateResponse)
-async def generate_badge_and_post(request: GenerateRequest):
+async def generate_badge_and_post(request: GenerateRequest, session_token: str = Cookie(None)):
     try:
         if not GEMINI_API_KEY:
             raise HTTPException(status_code=500, detail="Gemini API key not configured")
         
+        # Verify user session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Find user by session token (simple approach - in production use JWT)
+        user = await db.users.find_one({"session_token": session_token})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid session")
+
         # Prepare the prompt for Gemini API
         prompt = f"""You are an expert AI copywriter and branding strategist. You will receive three inputs: {request.employeeName}, {request.learning}, and {request.difficulty}.
 
@@ -362,6 +371,28 @@ Difficulty: {request.difficulty}"""
         # Convert SVG to base64 data URL
         badge_base64 = base64.b64encode(badge_svg.encode('utf-8')).decode('utf-8')
         badge_url = f"data:image/svg+xml;base64,{badge_base64}"
+        
+        # Store badge generation in database
+        badge_generation = BadgeGeneration(
+            user_id=user["id"],
+            user_name=user["name"],
+            employee_name=request.employeeName,
+            learning=request.learning,
+            difficulty=request.difficulty,
+            badge_text=badge_text,
+            linkedin_post=linkedin_post,
+            badge_url=badge_url
+        )
+        await db.badge_generations.insert_one(badge_generation.dict())
+        
+        # Update user's badge count and last active
+        await db.users.update_one(
+            {"id": user["id"]},
+            {
+                "$inc": {"total_badges_generated": 1},
+                "$set": {"last_active": datetime.utcnow()}
+            }
+        )
         
         return GenerateResponse(
             badgeUrl=badge_url,
