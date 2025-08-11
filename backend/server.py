@@ -557,7 +557,7 @@ async def get_admin_stats(session_token: str = Cookie(None)):
     try:
         admin_user = await verify_admin(session_token)
         
-        # Get counts
+        # Get existing badge stats
         total_users = await db.users.count_documents({})
         total_admins = await db.users.count_documents({"role": "admin"})
         total_badges = await db.badge_generations.count_documents({})
@@ -573,7 +573,7 @@ async def get_admin_stats(session_token: str = Cookie(None)):
                 "created_at": activity["created_at"]
             })
         
-        # Get top learners
+        # Get top learners (badge count)
         pipeline = [
             {"$group": {"_id": "$user_name", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}},
@@ -586,27 +586,224 @@ async def get_admin_stats(session_token: str = Cookie(None)):
                 "badge_count": learner["count"]
             })
         
+        # Get learning platform stats
+        total_profiles = await db.employee_profiles.count_documents({})
+        total_goals = await db.learning_goals.count_documents({})
+        total_milestones = await db.milestones.count_documents({})
+        total_resources = await db.resources.count_documents({})
+        
+        # Calculate monthly learning hours for current month
+        current_month = datetime.utcnow().strftime("%Y-%m")
+        monthly_hours_pipeline = [
+            {"$match": {"month_year": current_month}},
+            {"$group": {"_id": None, "total_hours": {"$sum": "$hours_invested"}}}
+        ]
+        monthly_hours_result = await db.milestones.aggregate(monthly_hours_pipeline).to_list(1)
+        monthly_learning_hours = monthly_hours_result[0]["total_hours"] if monthly_hours_result else 0
+        
+        # Count employees meeting 6-hour target this month
+        employees_meeting_target_pipeline = [
+            {"$match": {"month_year": current_month}},
+            {"$group": {"_id": "$user_id", "total_hours": {"$sum": "$hours_invested"}}},
+            {"$match": {"total_hours": {"$gte": 6}}}
+        ]
+        meeting_target_result = await db.milestones.aggregate(employees_meeting_target_pipeline).to_list(1000)
+        employees_meeting_target = len(meeting_target_result)
+        
+        # Get top learning platforms
+        platforms_pipeline = [
+            {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        top_platforms = []
+        async for platform in db.milestones.aggregate(platforms_pipeline):
+            top_platforms.append({
+                "platform": platform["_id"],
+                "usage_count": platform["count"]
+            })
+        
+        # Get skills by department
+        skills_by_dept = []
+        async for profile in db.employee_profiles.find({}):
+            for skill in profile.get("existing_skills", []):
+                skills_by_dept.append({
+                    "department": profile["department"],
+                    "skill": skill
+                })
+        
         # Log admin action
         admin_action = AdminAction(
             admin_id=admin_user["id"],
             admin_name=admin_user["name"],
-            action="view_stats",
-            details="Viewed admin dashboard stats"
+            action="view_enhanced_stats",
+            details="Viewed enhanced admin dashboard with learning platform analytics"
         )
         await db.admin_actions.insert_one(admin_action.dict())
         
         return AdminStats(
+            # Badge stats
             total_users=total_users,
             total_admins=total_admins,
             total_badges_generated=total_badges,
             recent_activities=recent_activities,
-            top_learners=top_learners
+            top_learners=top_learners,
+            # Learning platform stats
+            total_profiles=total_profiles,
+            total_goals=total_goals,
+            total_milestones=total_milestones,
+            total_resources=total_resources,
+            monthly_learning_hours=monthly_learning_hours,
+            employees_meeting_target=employees_meeting_target,
+            top_learning_platforms=top_platforms,
+            skills_by_department=skills_by_dept[:20]  # Limit for performance
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting admin stats: {str(e)}")
+        logger.error(f"Error getting enhanced admin stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/resources/pending")
+async def get_pending_resources(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        resources = []
+        async for resource in db.resources.find({"approved": False}).sort("created_at", -1):
+            resources.append(Resource(**resource))
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="view_pending_resources",
+            details="Viewed pending resources for approval"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return {"resources": resources}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/admin/resources/{resource_id}/approve")
+async def approve_resource(resource_id: str, session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        result = await db.resources.update_one(
+            {"id": resource_id},
+            {
+                "$set": {
+                    "approved": True,
+                    "approved_by_admin_id": admin_user["id"]
+                }
+            }
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="approve_resource",
+            details=f"Approved resource with ID: {resource_id}"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return {"message": "Resource approved successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/learning-analytics")
+async def get_learning_analytics(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        # Department-wise learning hours
+        dept_hours_pipeline = [
+            {"$lookup": {
+                "from": "employee_profiles",
+                "localField": "user_id",
+                "foreignField": "user_id",
+                "as": "profile"
+            }},
+            {"$unwind": "$profile"},
+            {"$group": {
+                "_id": "$profile.department",
+                "total_hours": {"$sum": "$hours_invested"},
+                "milestone_count": {"$sum": 1}
+            }},
+            {"$sort": {"total_hours": -1}}
+        ]
+        
+        dept_analytics = []
+        async for result in db.milestones.aggregate(dept_hours_pipeline):
+            dept_analytics.append({
+                "department": result["_id"],
+                "total_hours": result["total_hours"],
+                "milestone_count": result["milestone_count"]
+            })
+        
+        # Skills trend analysis
+        skills_pipeline = [
+            {"$lookup": {
+                "from": "employee_profiles",
+                "localField": "user_id",
+                "foreignField": "user_id",
+                "as": "profile"
+            }},
+            {"$unwind": "$profile"},
+            {"$group": {
+                "_id": {
+                    "skill": {"$toLower": {"$trim": {"input": "$what_learned"}}},
+                    "month": "$month_year"
+                },
+                "count": {"$sum": 1}
+            }},
+            {"$group": {
+                "_id": "$_id.skill",
+                "monthly_data": {"$push": {
+                    "month": "$_id.month",
+                    "count": "$count"
+                }},
+                "total": {"$sum": "$count"}
+            }},
+            {"$sort": {"total": -1}},
+            {"$limit": 20}
+        ]
+        
+        skills_trends = []
+        async for result in db.milestones.aggregate(skills_pipeline):
+            skills_trends.append({
+                "skill": result["_id"],
+                "total_count": result["total"],
+                "monthly_data": result["monthly_data"]
+            })
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="view_learning_analytics",
+            details="Viewed detailed learning analytics dashboard"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return {
+            "department_analytics": dept_analytics,
+            "skills_trends": skills_trends
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/admin/users")
