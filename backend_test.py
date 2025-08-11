@@ -617,10 +617,11 @@ class BackendTester:
                         f"Post length: {len(linkedin_post)} chars")
             return False
         
-        # Check for key elements that should be in a good LinkedIn post (updated for current test data)
+        # Check for key elements that should be in a good LinkedIn post
+        # Note: LinkedIn post is for the logged-in user, not the employee name in the badge
         required_elements = [
-            "Sarah Johnson",  # Employee name from current test data
             "Python",         # Learning topic (partial match, case insensitive)
+            "Branding Pioneers"  # Company name should be mentioned
         ]
         
         missing_elements = []
