@@ -272,7 +272,275 @@ async def get_current_user(session_token: str = Cookie(None)):
         logger.error(f"Error getting current user: {str(e)}")
         raise HTTPException(status_code=401, detail="Authentication required")
 
-# Helper function to verify admin access
+# Employee Profile endpoints
+@api_router.post("/profile", response_model=EmployeeProfile)
+async def create_employee_profile(profile_data: EmployeeProfileCreate, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Check if profile already exists
+        existing_profile = await db.employee_profiles.find_one({"user_id": user["id"]})
+        if existing_profile:
+            raise HTTPException(status_code=400, detail="Profile already exists")
+        
+        profile = EmployeeProfile(user_id=user["id"], **profile_data.dict())
+        await db.employee_profiles.insert_one(profile.dict())
+        
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/profile")
+async def get_employee_profile(session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        profile = await db.employee_profiles.find_one({"user_id": user["id"]})
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        return EmployeeProfile(**profile)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/profile")
+async def update_employee_profile(profile_data: EmployeeProfileCreate, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        update_data = profile_data.dict()
+        update_data["updated_at"] = datetime.utcnow()
+        
+        result = await db.employee_profiles.update_one(
+            {"user_id": user["id"]},
+            {"$set": update_data}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        updated_profile = await db.employee_profiles.find_one({"user_id": user["id"]})
+        return EmployeeProfile(**updated_profile)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Learning Goals endpoints
+@api_router.post("/goals", response_model=LearningGoal)
+async def create_learning_goal(goal_data: LearningGoalCreate, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        goal = LearningGoal(user_id=user["id"], **goal_data.dict())
+        await db.learning_goals.insert_one(goal.dict())
+        
+        return goal
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/goals")
+async def get_learning_goals(session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        goals = []
+        async for goal in db.learning_goals.find({"user_id": user["id"]}).sort("created_at", -1):
+            goals.append(LearningGoal(**goal))
+        
+        return {"goals": goals}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/goals/{goal_id}")
+async def update_learning_goal(goal_id: str, goal_data: LearningGoalCreate, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        update_data = goal_data.dict()
+        update_data["updated_at"] = datetime.utcnow()
+        
+        result = await db.learning_goals.update_one(
+            {"id": goal_id, "user_id": user["id"]},
+            {"$set": update_data}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Goal not found")
+        
+        updated_goal = await db.learning_goals.find_one({"id": goal_id})
+        return LearningGoal(**updated_goal)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Milestones endpoints
+@api_router.post("/milestones", response_model=Milestone)
+async def create_milestone(milestone_data: MilestoneCreate, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Set current month-year
+        current_month = datetime.utcnow().strftime("%Y-%m")
+        
+        milestone = Milestone(
+            user_id=user["id"],
+            month_year=current_month,
+            **milestone_data.dict()
+        )
+        await db.milestones.insert_one(milestone.dict())
+        
+        # Auto-add resource if it's a new source
+        await auto_add_resource_from_milestone(milestone, user["id"])
+        
+        return milestone
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/milestones")
+async def get_milestones(session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        milestones = []
+        async for milestone in db.milestones.find({"user_id": user["id"]}).sort("created_at", -1):
+            milestones.append(Milestone(**milestone))
+        
+        return {"milestones": milestones}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Resources endpoints
+@api_router.get("/resources")
+async def get_approved_resources(category: str = None, session_token: str = Cookie(None)):
+    try:
+        await verify_user_session(session_token)
+        
+        query = {"approved": True}
+        if category:
+            query["category"] = category
+        
+        resources = []
+        async for resource in db.resources.find(query).sort("created_at", -1):
+            resources.append(Resource(**resource))
+        
+        return {"resources": resources}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Peer Learning endpoints
+@api_router.get("/peers")
+async def get_peer_profiles(session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Get all profiles except current user
+        profiles = []
+        async for profile in db.employee_profiles.find({"user_id": {"$ne": user["id"]}}):
+            # Remove sensitive data - only show learning-related info
+            peer_profile = {
+                "id": profile["id"],
+                "full_name": profile["full_name"],
+                "position": profile["position"],
+                "department": profile["department"],
+                "existing_skills": profile["existing_skills"],
+                "learning_interests": profile["learning_interests"],
+                "profile_picture": profile.get("profile_picture")
+            }
+            
+            # Add recent milestones
+            recent_milestones = []
+            async for milestone in db.milestones.find({"user_id": profile["user_id"]}).sort("created_at", -1).limit(3):
+                recent_milestones.append({
+                    "what_learned": milestone["what_learned"],
+                    "source": milestone["source"],
+                    "can_teach": milestone["can_teach"],
+                    "hours_invested": milestone["hours_invested"],
+                    "created_at": milestone["created_at"]
+                })
+            
+            peer_profile["recent_milestones"] = recent_milestones
+            profiles.append(peer_profile)
+        
+        return {"peers": profiles}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/bookmarks/{user_id}")
+async def bookmark_user(user_id: str, session_token: str = Cookie(None)):
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Check if bookmark already exists
+        existing = await db.bookmarks.find_one({"user_id": user["id"], "bookmarked_user_id": user_id})
+        if existing:
+            raise HTTPException(status_code=400, detail="Already bookmarked")
+        
+        bookmark = Bookmark(user_id=user["id"], bookmarked_user_id=user_id)
+        await db.bookmarks.insert_one(bookmark.dict())
+        
+        return {"message": "User bookmarked successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Helper function to verify user session
+async def verify_user_session(session_token: str = Cookie(None)):
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = await db.users.find_one({"session_token": session_token})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    return user
+
+# Helper function to auto-add resources from milestones
+async def auto_add_resource_from_milestone(milestone: Milestone, user_id: str):
+    try:
+        # Extract domain/platform name from source
+        source = milestone.source.lower()
+        
+        # Check if resource already exists
+        existing = await db.resources.find_one({"url": milestone.source})
+        if existing:
+            return
+        
+        # Create resource entry (requires admin approval)
+        resource = Resource(
+            title=f"Learning Resource: {milestone.what_learned[:50]}...",
+            url=milestone.source,
+            description=f"Resource for learning: {milestone.what_learned}",
+            category="General",
+            tags=[milestone.what_learned.split()[0].lower()],
+            added_by_user_id=user_id,
+            approved=False
+        )
+        
+        await db.resources.insert_one(resource.dict())
+    except Exception as e:
+        # Don't fail milestone creation if resource addition fails
+        logger.error(f"Failed to auto-add resource: {str(e)}")
+
+# Enhanced admin endpoints
 async def verify_admin(session_token: str = Cookie(None)):
     if not session_token:
         raise HTTPException(status_code=401, detail="Authentication required")
