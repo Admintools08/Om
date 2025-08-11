@@ -122,6 +122,14 @@ function EmployeeDashboard({ user }) {
             disabled={!profile}
           />
           <TabButton
+            tabId="recommendations"
+            label="AI Recommendations"
+            icon="🤖"
+            isActive={activeTab === 'recommendations'}
+            onClick={setActiveTab}
+            disabled={!profile}
+          />
+          <TabButton
             tabId="resources"
             label="Resources"
             icon="📚"
