@@ -1149,6 +1149,32 @@ class BackendTester:
         else:
             print("❌ Badge generation with auth failed. Skipping dependent tests.")
         
+        print("\n" + "=" * 60)
+        print("AI-POWERED RECOMMENDATIONS SYSTEM TESTING")
+        print("=" * 60)
+        
+        # Test 17: Create Employee Profile (required for recommendations)
+        profile_result = self.test_create_employee_profile()
+        
+        if profile_result:
+            # Test 18: Get AI Recommendations
+            recommendations_result = self.test_get_ai_recommendations()
+            
+            # Test 19: Refresh AI Recommendations
+            self.test_refresh_ai_recommendations()
+            
+            # Test 20: AI Recommendation Quality (if we got recommendations)
+            if recommendations_result:
+                self.test_ai_recommendation_quality(recommendations_result)
+                
+                # Test 21: Gemini API Integration Quality
+                self.test_gemini_api_integration(recommendations_result)
+            
+            # Test 22: Recommendations Caching
+            self.test_recommendations_caching()
+        else:
+            print("❌ Employee profile creation failed. Skipping AI recommendations tests.")
+        
         return self.get_summary()
 
     def get_summary(self):
