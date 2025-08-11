@@ -41,6 +41,40 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    role: str = "user"  # "user" or "admin"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_active: datetime = Field(default_factory=datetime.utcnow)
+    total_badges_generated: int = 0
+
+class UserCreate(BaseModel):
+    name: str
+
+class UserLogin(BaseModel):
+    name: str
+
+class BadgeGeneration(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_name: str
+    employee_name: str
+    learning: str
+    difficulty: str
+    badge_text: str
+    linkedin_post: str
+    badge_url: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AdminAction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admin_id: str
+    admin_name: str
+    action: str
+    details: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
 class GenerateRequest(BaseModel):
     employeeName: str
     learning: str
@@ -49,6 +83,17 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     badgeUrl: str
     linkedinPost: str
+
+class AuthResponse(BaseModel):
+    user: User
+    session_token: str
+
+class AdminStats(BaseModel):
+    total_users: int
+    total_admins: int
+    total_badges_generated: int
+    recent_activities: List[dict]
+    top_learners: List[dict]
 
 # Badge generation function
 def generate_badge_svg(employee_name: str, badge_text: str, difficulty: str) -> str:
