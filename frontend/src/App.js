@@ -3,7 +3,7 @@ import "./App.css";
 import axios from "axios";
 import LoginForm from "./components/LoginForm";
 import AdminDashboard from "./components/AdminDashboard";
-import BadgeGenerator from "./components/BadgeGenerator";
+import EmployeeDashboard from "./components/EmployeeDashboard";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -78,7 +78,7 @@ function App() {
         <div className="header-content">
           <h1 className="app-title">
             <span className="brand-text">Branding Pioneers</span>
-            {user.role === 'admin' ? ' Admin Dashboard' : ' Learning Badge Generator'}
+            Learning Platform
           </h1>
           <div className="user-info">
             <span className="welcome-text">Welcome, {user.name}</span>
@@ -94,9 +94,9 @@ function App() {
 
       <main className="main-content">
         {user.role === 'admin' ? (
-          <AdminDashboard />
+          <AdminDashboard user={user} />
         ) : (
-          <BadgeGenerator />
+          <EmployeeDashboard user={user} />
         )}
       </main>
     </div>
