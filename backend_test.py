@@ -67,12 +67,441 @@ class BackendTester:
             self.log_test("API Health Check", False, f"Failed to connect to API: {str(e)}")
             return False
 
-    def test_gemini_api_integration(self):
-        """Test Gemini API integration with the /api/generate endpoint"""
+    def test_admin_login(self):
+        """Test admin login with 'Arush T.' - should get admin role"""
+        test_data = {"name": "Arush T."}
+        
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/auth/login",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check response structure
+                if "user" in data and "session_token" in data:
+                    user = data["user"]
+                    if user.get("name") == "Arush T." and user.get("role") == "admin":
+                        # Store session for later tests
+                        self.admin_session = response.cookies.get('session_token')
+                        self.log_test("Admin Login", True, 
+                                    "Admin login successful - 'Arush T.' assigned admin role correctly",
+                                    f"User role: {user.get('role')}, Session stored")
+                        return data
+                    else:
+                        self.log_test("Admin Login", False,
+                                    f"Admin role not assigned correctly. Name: {user.get('name')}, Role: {user.get('role')}")
+                        return None
+                else:
+                    self.log_test("Admin Login", False,
+                                "Login response missing required fields",
+                                f"Response keys: {list(data.keys())}")
+                    return None
+            else:
+                self.log_test("Admin Login", False,
+                            f"Login failed with status {response.status_code}",
+                            response.text)
+                return None
+                
+        except Exception as e:
+            self.log_test("Admin Login", False,
+                        f"Failed to login admin: {str(e)}")
+            return None
+
+    def test_user_login(self):
+        """Test regular user login with 'John Doe' - should get user role"""
+        test_data = {"name": "John Doe"}
+        
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/auth/login",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check response structure
+                if "user" in data and "session_token" in data:
+                    user = data["user"]
+                    if user.get("name") == "John Doe" and user.get("role") == "user":
+                        # Store session for later tests
+                        self.user_session = response.cookies.get('session_token')
+                        self.log_test("Regular User Login", True, 
+                                    "Regular user login successful - assigned user role correctly",
+                                    f"User role: {user.get('role')}, Session stored")
+                        return data
+                    else:
+                        self.log_test("Regular User Login", False,
+                                    f"User role not assigned correctly. Name: {user.get('name')}, Role: {user.get('role')}")
+                        return None
+                else:
+                    self.log_test("Regular User Login", False,
+                                "Login response missing required fields",
+                                f"Response keys: {list(data.keys())}")
+                    return None
+            else:
+                self.log_test("Regular User Login", False,
+                            f"Login failed with status {response.status_code}",
+                            response.text)
+                return None
+                
+        except Exception as e:
+            self.log_test("Regular User Login", False,
+                        f"Failed to login user: {str(e)}")
+            return None
+
+    def test_auth_me_endpoint(self):
+        """Test /api/auth/me endpoint with admin session"""
+        if not self.admin_session:
+            self.log_test("Auth Me Endpoint", False, "No admin session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.get(
+                f"{API_BASE_URL}/auth/me",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("name") == "Arush T." and data.get("role") == "admin":
+                    self.log_test("Auth Me Endpoint", True, 
+                                "Session verification successful - returns correct user info",
+                                f"Name: {data.get('name')}, Role: {data.get('role')}")
+                    return True
+                else:
+                    self.log_test("Auth Me Endpoint", False,
+                                f"Incorrect user info returned. Name: {data.get('name')}, Role: {data.get('role')}")
+                    return False
+            else:
+                self.log_test("Auth Me Endpoint", False,
+                            f"Auth me failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Auth Me Endpoint", False,
+                        f"Failed to verify session: {str(e)}")
+            return False
+
+    def test_logout_endpoint(self):
+        """Test /api/auth/logout endpoint"""
+        if not self.user_session:
+            self.log_test("Logout Endpoint", False, "No user session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.user_session}
+            response = requests.post(
+                f"{API_BASE_URL}/auth/logout",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data and "logged out" in data["message"].lower():
+                    self.log_test("Logout Endpoint", True, 
+                                "Logout successful - session cleared",
+                                f"Response: {data.get('message')}")
+                    return True
+                else:
+                    self.log_test("Logout Endpoint", False,
+                                "Unexpected logout response",
+                                f"Response: {data}")
+                    return False
+            else:
+                self.log_test("Logout Endpoint", False,
+                            f"Logout failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Logout Endpoint", False,
+                        f"Failed to logout: {str(e)}")
+            return False
+
+    def test_admin_stats_with_admin(self):
+        """Test /api/admin/stats endpoint with admin session - should work"""
+        if not self.admin_session:
+            self.log_test("Admin Stats (Admin Access)", False, "No admin session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.get(
+                f"{API_BASE_URL}/admin/stats",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ["total_users", "total_admins", "total_badges_generated", "recent_activities", "top_learners"]
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    self.log_test("Admin Stats (Admin Access)", True, 
+                                "Admin stats endpoint accessible with admin session",
+                                f"Stats: {data.get('total_users')} users, {data.get('total_admins')} admins, {data.get('total_badges_generated')} badges")
+                    return True
+                else:
+                    self.log_test("Admin Stats (Admin Access)", False,
+                                f"Admin stats response missing fields: {missing_fields}",
+                                f"Available fields: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("Admin Stats (Admin Access)", False,
+                            f"Admin stats failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Stats (Admin Access)", False,
+                        f"Failed to get admin stats: {str(e)}")
+            return False
+
+    def test_admin_stats_with_user(self):
+        """Test /api/admin/stats endpoint with regular user session - should return 403"""
+        # Create a new user session for this test
+        test_data = {"name": "Regular User"}
+        
+        try:
+            # Login as regular user
+            response = requests.post(
+                f"{API_BASE_URL}/auth/login",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_test("Admin Stats (User Access)", False, "Failed to create test user session")
+                return False
+                
+            user_session = response.cookies.get('session_token')
+            
+            # Try to access admin stats
+            cookies = {'session_token': user_session}
+            response = requests.get(
+                f"{API_BASE_URL}/admin/stats",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 403:
+                self.log_test("Admin Stats (User Access)", True, 
+                            "Admin stats correctly blocked for regular user - returned 403 Forbidden",
+                            "Access control working properly")
+                return True
+            else:
+                self.log_test("Admin Stats (User Access)", False,
+                            f"Admin stats should return 403 for regular user, got {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Stats (User Access)", False,
+                        f"Failed to test user access to admin stats: {str(e)}")
+            return False
+
+    def test_admin_stats_without_auth(self):
+        """Test /api/admin/stats endpoint without authentication - should return 401"""
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/admin/stats",
+                timeout=10
+            )
+            
+            if response.status_code == 401:
+                self.log_test("Admin Stats (No Auth)", True, 
+                            "Admin stats correctly blocked without authentication - returned 401 Unauthorized",
+                            "Authentication requirement working properly")
+                return True
+            else:
+                self.log_test("Admin Stats (No Auth)", False,
+                            f"Admin stats should return 401 without auth, got {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Stats (No Auth)", False,
+                        f"Failed to test unauthenticated access to admin stats: {str(e)}")
+            return False
+
+    def test_admin_users_endpoint(self):
+        """Test /api/admin/users endpoint with admin session"""
+        if not self.admin_session:
+            self.log_test("Admin Users Endpoint", False, "No admin session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.get(
+                f"{API_BASE_URL}/admin/users",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "users" in data and isinstance(data["users"], list):
+                    self.log_test("Admin Users Endpoint", True, 
+                                "Admin users endpoint working - returns user list",
+                                f"Found {len(data['users'])} users")
+                    return True
+                else:
+                    self.log_test("Admin Users Endpoint", False,
+                                "Admin users response missing 'users' field or not a list",
+                                f"Response keys: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("Admin Users Endpoint", False,
+                            f"Admin users failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Users Endpoint", False,
+                        f"Failed to get admin users: {str(e)}")
+            return False
+
+    def test_admin_badges_endpoint(self):
+        """Test /api/admin/badges endpoint with admin session"""
+        if not self.admin_session:
+            self.log_test("Admin Badges Endpoint", False, "No admin session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.get(
+                f"{API_BASE_URL}/admin/badges",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "badges" in data and isinstance(data["badges"], list):
+                    self.log_test("Admin Badges Endpoint", True, 
+                                "Admin badges endpoint working - returns badge list",
+                                f"Found {len(data['badges'])} badge generations")
+                    return True
+                else:
+                    self.log_test("Admin Badges Endpoint", False,
+                                "Admin badges response missing 'badges' field or not a list",
+                                f"Response keys: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("Admin Badges Endpoint", False,
+                            f"Admin badges failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Badges Endpoint", False,
+                        f"Failed to get admin badges: {str(e)}")
+            return False
+
+    def test_admin_actions_endpoint(self):
+        """Test /api/admin/actions endpoint with admin session"""
+        if not self.admin_session:
+            self.log_test("Admin Actions Endpoint", False, "No admin session available for testing")
+            return False
+            
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.get(
+                f"{API_BASE_URL}/admin/actions",
+                cookies=cookies,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "actions" in data and isinstance(data["actions"], list):
+                    self.log_test("Admin Actions Endpoint", True, 
+                                "Admin actions endpoint working - returns action log",
+                                f"Found {len(data['actions'])} admin actions")
+                    return True
+                else:
+                    self.log_test("Admin Actions Endpoint", False,
+                                "Admin actions response missing 'actions' field or not a list",
+                                f"Response keys: {list(data.keys())}")
+                    return False
+            else:
+                self.log_test("Admin Actions Endpoint", False,
+                            f"Admin actions failed with status {response.status_code}",
+                            response.text)
+                return False
+                
+        except Exception as e:
+            self.log_test("Admin Actions Endpoint", False,
+                        f"Failed to get admin actions: {str(e)}")
+            return False
+
+    def test_badge_generation_with_auth(self):
+        """Test /api/generate endpoint with authenticated user session - should work"""
+        if not self.admin_session:
+            self.log_test("Badge Generation (With Auth)", False, "No admin session available for testing")
+            return None
+            
         test_data = {
-            "employeeName": "John Smith",
-            "learning": "Advanced React hooks and state management patterns", 
-            "difficulty": "Hard"
+            "employeeName": "Sarah Johnson",
+            "learning": "Advanced Python data structures and algorithms", 
+            "difficulty": "Moderate"
+        }
+        
+        try:
+            cookies = {'session_token': self.admin_session}
+            response = requests.post(
+                f"{API_BASE_URL}/generate",
+                json=test_data,
+                cookies=cookies,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if response has required fields
+                if "badgeUrl" in data and "linkedinPost" in data:
+                    self.log_test("Badge Generation (With Auth)", True, 
+                                "Badge generation successful with authentication - creates database entries",
+                                f"Response keys: {list(data.keys())}")
+                    return data
+                else:
+                    self.log_test("Badge Generation (With Auth)", False,
+                                "Response missing required fields (badgeUrl, linkedinPost)",
+                                f"Received: {list(data.keys())}")
+                    return None
+            else:
+                self.log_test("Badge Generation (With Auth)", False,
+                            f"Badge generation failed with status {response.status_code}",
+                            response.text)
+                return None
+                
+        except Exception as e:
+            self.log_test("Badge Generation (With Auth)", False,
+                        f"Failed to generate badge with auth: {str(e)}")
+            return None
+
+    def test_badge_generation_without_auth(self):
+        """Test /api/generate endpoint without authentication - should return 401"""
+        test_data = {
+            "employeeName": "Test User",
+            "learning": "Basic testing concepts", 
+            "difficulty": "Easy"
         }
         
         try:
@@ -83,30 +512,21 @@ class BackendTester:
                 timeout=30
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check if response has required fields
-                if "badgeUrl" in data and "linkedinPost" in data:
-                    self.log_test("Gemini API Integration", True, 
-                                "Successfully called Gemini API and received structured response",
-                                f"Response keys: {list(data.keys())}")
-                    return data
-                else:
-                    self.log_test("Gemini API Integration", False,
-                                "Response missing required fields (badgeUrl, linkedinPost)",
-                                f"Received: {list(data.keys())}")
-                    return None
+            if response.status_code == 401:
+                self.log_test("Badge Generation (No Auth)", True, 
+                            "Badge generation correctly blocked without authentication - returned 401",
+                            "Authentication requirement working properly")
+                return True
             else:
-                self.log_test("Gemini API Integration", False,
-                            f"API returned status {response.status_code}",
+                self.log_test("Badge Generation (No Auth)", False,
+                            f"Badge generation should return 401 without auth, got {response.status_code}",
                             response.text)
-                return None
+                return False
                 
         except Exception as e:
-            self.log_test("Gemini API Integration", False,
-                        f"Failed to call Gemini API: {str(e)}")
-            return None
+            self.log_test("Badge Generation (No Auth)", False,
+                        f"Failed to test unauthenticated badge generation: {str(e)}")
+            return False
 
     def test_svg_badge_generation(self, api_response: Dict[Any, Any]):
         """Test SVG badge generation and base64 encoding"""
