@@ -173,6 +173,10 @@ function EmployeeDashboard({ user }) {
           <BadgeGenerator />
         )}
         
+        {activeTab === 'recommendations' && profile && (
+          <Recommendations user={user} profile={profile} />
+        )}
+        
         {activeTab === 'resources' && profile && (
           <ResourceDirectory user={user} profile={profile} />
         )}
