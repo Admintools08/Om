@@ -95,6 +95,230 @@ class AdminStats(BaseModel):
     recent_activities: List[dict]
     top_learners: List[dict]
 
+# Authentication endpoints
+@api_router.post("/auth/login", response_model=AuthResponse)
+async def login_user(user_data: UserLogin, response: Response):
+    try:
+        # Check if user exists
+        existing_user = await db.users.find_one({"name": user_data.name})
+        
+        if existing_user:
+            # Update last active
+            await db.users.update_one(
+                {"id": existing_user["id"]},
+                {"$set": {"last_active": datetime.utcnow()}}
+            )
+            user = User(**existing_user)
+        else:
+            # Create new user
+            role = "admin" if user_data.name == "Arush T." else "user"
+            user = User(name=user_data.name, role=role)
+            await db.users.insert_one(user.dict())
+        
+        # Generate session token (simple approach - in production use JWT)
+        session_token = str(uuid.uuid4())
+        await db.users.update_one(
+            {"id": user.id},
+            {"$set": {"session_token": session_token}}
+        )
+        
+        # Set cookie
+        response.set_cookie(
+            key="session_token", 
+            value=session_token, 
+            max_age=86400 * 7,  # 7 days
+            httponly=True,
+            samesite="lax"
+        )
+        
+        # Log admin action if admin
+        if user.role == "admin":
+            admin_action = AdminAction(
+                admin_id=user.id,
+                admin_name=user.name,
+                action="login",
+                details="Admin logged into the system"
+            )
+            await db.admin_actions.insert_one(admin_action.dict())
+        
+        return AuthResponse(user=user, session_token=session_token)
+        
+    except Exception as e:
+        logger.error(f"Error during login: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/auth/logout")
+async def logout_user(response: Response, session_token: str = Cookie(None)):
+    try:
+        if session_token:
+            # Remove session token from user
+            await db.users.update_one(
+                {"session_token": session_token},
+                {"$unset": {"session_token": ""}}
+            )
+        
+        # Clear cookie
+        response.delete_cookie(key="session_token")
+        return {"message": "Logged out successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error during logout: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/auth/me")
+async def get_current_user(session_token: str = Cookie(None)):
+    try:
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        user = await db.users.find_one({"session_token": session_token})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid session")
+        
+        return User(**user)
+        
+    except Exception as e:
+        logger.error(f"Error getting current user: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+# Helper function to verify admin access
+async def verify_admin(session_token: str = Cookie(None)):
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = await db.users.find_one({"session_token": session_token})
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return user
+
+# Admin endpoints
+@api_router.get("/admin/stats", response_model=AdminStats)
+async def get_admin_stats(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        # Get counts
+        total_users = await db.users.count_documents({})
+        total_admins = await db.users.count_documents({"role": "admin"})
+        total_badges = await db.badge_generations.count_documents({})
+        
+        # Get recent activities (last 20 badge generations)
+        recent_activities = []
+        async for activity in db.badge_generations.find({}).sort("created_at", -1).limit(20):
+            recent_activities.append({
+                "user_name": activity["user_name"],
+                "employee_name": activity["employee_name"],
+                "learning": activity["learning"],
+                "difficulty": activity["difficulty"],
+                "created_at": activity["created_at"]
+            })
+        
+        # Get top learners
+        pipeline = [
+            {"$group": {"_id": "$user_name", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        top_learners = []
+        async for learner in db.badge_generations.aggregate(pipeline):
+            top_learners.append({
+                "name": learner["_id"],
+                "badge_count": learner["count"]
+            })
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="view_stats",
+            details="Viewed admin dashboard stats"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return AdminStats(
+            total_users=total_users,
+            total_admins=total_admins,
+            total_badges_generated=total_badges,
+            recent_activities=recent_activities,
+            top_learners=top_learners
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting admin stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/users")
+async def get_all_users(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        users = []
+        async for user in db.users.find({}):
+            users.append(User(**user))
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="view_users",
+            details="Viewed all users list"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return {"users": users}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting users: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/badges")
+async def get_all_badge_generations(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        badges = []
+        async for badge in db.badge_generations.find({}).sort("created_at", -1):
+            badges.append(BadgeGeneration(**badge))
+        
+        # Log admin action
+        admin_action = AdminAction(
+            admin_id=admin_user["id"],
+            admin_name=admin_user["name"],
+            action="view_badges",
+            details="Viewed all badge generations"
+        )
+        await db.admin_actions.insert_one(admin_action.dict())
+        
+        return {"badges": badges}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting badge generations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/actions")
+async def get_admin_actions(session_token: str = Cookie(None)):
+    try:
+        admin_user = await verify_admin(session_token)
+        
+        actions = []
+        async for action in db.admin_actions.find({}).sort("timestamp", -1).limit(100):
+            actions.append(AdminAction(**action))
+        
+        return {"actions": actions}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting admin actions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Badge generation function
 def generate_badge_svg(employee_name: str, badge_text: str, difficulty: str) -> str:
     """Generate SVG badge with Branding Pioneers branding - different designs for each difficulty"""
