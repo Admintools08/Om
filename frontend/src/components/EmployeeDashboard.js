@@ -7,6 +7,7 @@ import MilestonesManager from "./MilestonesManager";
 import ResourceDirectory from "./ResourceDirectory";
 import PeerLearning from "./PeerLearning";
 import BadgeGenerator from "./BadgeGenerator";
+import Recommendations from "./Recommendations";
 import "../styles/EmployeeDashboard.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
