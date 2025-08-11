@@ -568,6 +568,330 @@ async def auto_add_resource_from_milestone(milestone: Milestone, user_id: str):
         # Don't fail milestone creation if resource addition fails
         logger.error(f"Failed to auto-add resource: {str(e)}")
 
+# AI-Powered Recommendations Functions
+
+async def get_user_learning_profile(user_id: str):
+    """Analyze user's learning data to create a comprehensive profile"""
+    try:
+        # Get user profile
+        profile = await db.employee_profiles.find_one({"user_id": user_id})
+        
+        # Get learning goals
+        goals = []
+        async for goal in db.learning_goals.find({"user_id": user_id}):
+            goals.append(goal)
+            
+        # Get milestones
+        milestones = []
+        async for milestone in db.milestones.find({"user_id": user_id}).sort("created_at", -1).limit(20):
+            milestones.append(milestone)
+            
+        # Get badge generations for learning interests
+        badges = []
+        async for badge in db.badge_generations.find({"user_id": user_id}).sort("created_at", -1).limit(10):
+            badges.append(badge)
+            
+        return {
+            "profile": profile,
+            "goals": goals,
+            "milestones": milestones,
+            "badges": badges
+        }
+    except Exception as e:
+        logger.error(f"Error getting user learning profile: {str(e)}")
+        return None
+
+async def generate_ai_recommendations(user_profile: dict):
+    """Use Gemini AI to generate personalized learning recommendations"""
+    try:
+        if not GEMINI_API_KEY:
+            return {"paid": [], "unpaid": []}
+            
+        # Prepare user data for AI analysis
+        profile = user_profile.get("profile", {})
+        goals = user_profile.get("goals", [])
+        milestones = user_profile.get("milestones", [])
+        badges = user_profile.get("badges", [])
+        
+        # Create comprehensive prompt for AI
+        prompt = f"""You are an expert AI learning advisor specializing in personalized course recommendations. 
+
+Based on the following employee learning data, generate 8-10 highly personalized learning recommendations (mix of paid and unpaid resources).
+
+EMPLOYEE PROFILE:
+- Department: {profile.get('department', 'Not specified')}
+- Position: {profile.get('position', 'Not specified')}
+- Existing Skills: {', '.join(profile.get('existing_skills', [])) if profile.get('existing_skills') else 'None specified'}
+- Learning Interests: {', '.join(profile.get('learning_interests', [])) if profile.get('learning_interests') else 'None specified'}
+
+RECENT LEARNING ACTIVITIES:
+Recent Milestones: {[m.get('what_learned', '') for m in milestones[:5]]}
+Learning Sources Used: {list(set([m.get('source', '') for m in milestones if m.get('source')]))}
+Badge Generations: {[b.get('learning', '') for b in badges[:3]]}
+
+LEARNING GOALS:
+Active Goals: {[g.get('title', '') for g in goals if g.get('status') == 'active']}
+
+INSTRUCTIONS:
+1. Generate 5-6 FREE resources (YouTube channels, free courses, documentation, tutorials)
+2. Generate 4-5 PAID resources (Udemy, Coursera, Pluralsight, LinkedIn Learning, etc.)
+3. 70% should match their existing interests/skills (skill building)
+4. 30% should introduce new adjacent skills for growth
+5. Consider their department and position for relevance
+6. Include specific course/resource titles, not just generic topics
+7. Provide realistic time estimates and difficulty levels
+
+FORMAT YOUR RESPONSE EXACTLY AS:
+UNPAID_RESOURCES:
+Title: [Specific course/resource title]
+Platform: [Platform name]
+URL: [Realistic URL - use actual platform domains]
+Description: [2-3 sentence description]
+Skills: [skill1, skill2, skill3]
+Difficulty: [beginner/intermediate/advanced]
+Hours: [number]
+Reason: [Why recommended for this person]
+---
+[Repeat for each unpaid resource]
+
+PAID_RESOURCES:
+Title: [Specific course/resource title]
+Platform: [Platform name]
+URL: [Realistic URL - use actual platform domains]
+Description: [2-3 sentence description]
+Skills: [skill1, skill2, skill3]
+Difficulty: [beginner/intermediate/advanced]
+Hours: [number]
+Price: [Estimated price like $49, $29/month, etc.]
+Reason: [Why recommended for this person]
+---
+[Repeat for each paid resource]
+
+Make recommendations feel personal and directly relevant to their learning journey."""
+
+        # Make request to Gemini API
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+            headers=headers,
+            json=payload
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"Gemini API error: {response.text}")
+            return {"paid": [], "unpaid": []}
+            
+        response_data = response.json()
+        
+        if not response_data.get('candidates') or not response_data['candidates'][0].get('content'):
+            logger.error("Invalid response from Gemini API")
+            return {"paid": [], "unpaid": []}
+            
+        generated_text = response_data['candidates'][0]['content']['parts'][0]['text']
+        
+        # Parse the AI response
+        return parse_ai_recommendations(generated_text)
+        
+    except Exception as e:
+        logger.error(f"Error generating AI recommendations: {str(e)}")
+        return {"paid": [], "unpaid": []}
+
+def parse_ai_recommendations(ai_response: str):
+    """Parse the structured AI response into recommendation objects"""
+    try:
+        paid_recommendations = []
+        unpaid_recommendations = []
+        
+        # Split by sections
+        if "UNPAID_RESOURCES:" in ai_response and "PAID_RESOURCES:" in ai_response:
+            parts = ai_response.split("PAID_RESOURCES:")
+            unpaid_section = parts[0].replace("UNPAID_RESOURCES:", "").strip()
+            paid_section = parts[1].strip()
+        else:
+            return {"paid": [], "unpaid": []}
+        
+        # Parse unpaid resources
+        unpaid_items = unpaid_section.split("---")
+        for item in unpaid_items:
+            if item.strip():
+                recommendation = parse_recommendation_item(item.strip(), "unpaid")
+                if recommendation:
+                    unpaid_recommendations.append(recommendation)
+        
+        # Parse paid resources
+        paid_items = paid_section.split("---")
+        for item in paid_items:
+            if item.strip():
+                recommendation = parse_recommendation_item(item.strip(), "paid")
+                if recommendation:
+                    paid_recommendations.append(recommendation)
+        
+        return {
+            "paid": paid_recommendations,
+            "unpaid": unpaid_recommendations
+        }
+        
+    except Exception as e:
+        logger.error(f"Error parsing AI recommendations: {str(e)}")
+        return {"paid": [], "unpaid": []}
+
+def parse_recommendation_item(item_text: str, category: str):
+    """Parse individual recommendation item from AI response"""
+    try:
+        lines = item_text.strip().split('\n')
+        recommendation_data = {}
+        
+        for line in lines:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                key = key.strip().lower()
+                value = value.strip()
+                
+                if key == 'title':
+                    recommendation_data['title'] = value
+                elif key == 'platform':
+                    recommendation_data['platform'] = value
+                elif key == 'url':
+                    recommendation_data['url'] = value
+                elif key == 'description':
+                    recommendation_data['description'] = value
+                elif key == 'skills':
+                    recommendation_data['skill_tags'] = [s.strip() for s in value.split(',')]
+                elif key == 'difficulty':
+                    recommendation_data['difficulty_level'] = value
+                elif key == 'hours':
+                    try:
+                        recommendation_data['estimated_hours'] = int(value.replace('h', '').strip())
+                    except:
+                        recommendation_data['estimated_hours'] = 10
+                elif key == 'price' and category == 'paid':
+                    recommendation_data['price'] = value
+                elif key == 'reason':
+                    recommendation_data['reason'] = value
+        
+        # Validate required fields
+        required_fields = ['title', 'platform', 'description', 'reason']
+        if all(field in recommendation_data for field in required_fields):
+            return RecommendationItem(
+                title=recommendation_data['title'],
+                description=recommendation_data['description'],
+                platform=recommendation_data['platform'],
+                url=recommendation_data.get('url', f"https://{recommendation_data['platform'].lower().replace(' ', '')}.com"),
+                category=category,
+                skill_tags=recommendation_data.get('skill_tags', []),
+                difficulty_level=recommendation_data.get('difficulty_level', 'intermediate'),
+                estimated_hours=recommendation_data.get('estimated_hours', 10),
+                price=recommendation_data.get('price') if category == 'paid' else None,
+                reason=recommendation_data['reason'],
+                relevance_score=0.8  # Default score
+            )
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error parsing recommendation item: {str(e)}")
+        return None
+
+# Recommendations API Endpoints
+
+@api_router.get("/recommendations", response_model=RecommendationsResponse)
+async def get_personalized_recommendations(session_token: str = Cookie(None)):
+    """Get AI-powered personalized learning recommendations for the user"""
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Check if we have cached recommendations
+        cached_recommendations = await db.user_recommendations.find_one({
+            "user_id": user["id"],
+            "expires_at": {"$gt": datetime.utcnow()}
+        })
+        
+        if cached_recommendations:
+            return RecommendationsResponse(
+                paid_recommendations=[RecommendationItem(**item) for item in cached_recommendations["paid_recommendations"]],
+                unpaid_recommendations=[RecommendationItem(**item) for item in cached_recommendations["unpaid_recommendations"]],
+                total_count=len(cached_recommendations["paid_recommendations"]) + len(cached_recommendations["unpaid_recommendations"]),
+                personalization_factors=["Learning History", "Skill Interests", "Department Role", "Active Goals"]
+            )
+        
+        # Generate new recommendations
+        user_profile = await get_user_learning_profile(user["id"])
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        ai_recommendations = await generate_ai_recommendations(user_profile)
+        
+        # Cache the recommendations
+        user_recommendations = UserRecommendations(
+            user_id=user["id"],
+            paid_recommendations=ai_recommendations["paid"],
+            unpaid_recommendations=ai_recommendations["unpaid"]
+        )
+        
+        # Save to database
+        await db.user_recommendations.insert_one(user_recommendations.dict())
+        
+        return RecommendationsResponse(
+            paid_recommendations=ai_recommendations["paid"],
+            unpaid_recommendations=ai_recommendations["unpaid"],
+            total_count=len(ai_recommendations["paid"]) + len(ai_recommendations["unpaid"]),
+            personalization_factors=["Learning History", "Skill Interests", "Department Role", "Active Goals", "AI Analysis"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/recommendations/refresh")
+async def refresh_recommendations(session_token: str = Cookie(None)):
+    """Force refresh of user recommendations"""
+    try:
+        user = await verify_user_session(session_token)
+        
+        # Delete existing cached recommendations
+        await db.user_recommendations.delete_many({"user_id": user["id"]})
+        
+        # Generate new recommendations
+        user_profile = await get_user_learning_profile(user["id"])
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        ai_recommendations = await generate_ai_recommendations(user_profile)
+        
+        # Cache the new recommendations
+        user_recommendations = UserRecommendations(
+            user_id=user["id"],
+            paid_recommendations=ai_recommendations["paid"],
+            unpaid_recommendations=ai_recommendations["unpaid"]
+        )
+        
+        await db.user_recommendations.insert_one(user_recommendations.dict())
+        
+        return {"message": "Recommendations refreshed successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error refreshing recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Enhanced admin endpoints
 async def verify_admin(session_token: str = Cookie(None)):
     if not session_token:
